@@ -1,17 +1,25 @@
 const axios = require("axios");
 const puppeteer = require("puppeteer");
-var CronJob = require('cron').CronJob;
-const commandLineArgs = require('command-line-args')
-const options = commandLineArgs([{ name: "debug", alias: "d", type: Boolean }]);
+const CronJob = require('cron').CronJob;
 require('dotenv').config();
 
-let hook = options.debug ? process.env.TEST_HOOK : process.env.PROD_HOOK;
+const log4js = require("log4js");
+const logger = log4js.getLogger();
+
+const commandLineArgs = require('command-line-args')
+const options = commandLineArgs([{ name: "test", alias: "t", type: Boolean }, { name: "verbose", alias: "v", type: Boolean }]);
+
+logger.level = options.verbose ? "debug" : "warn";
+
+let hook = options.test ? process.env.TEST_HOOK : process.env.PROD_HOOK;
 
 let sendMessage = async function (text) {
   try {
+    logger.info(`Sending message: ${text}`);
     await axios.post(hook, { text });
+    logger.info(`Sent message.`);
   } catch (error) {
-    console.log(error);
+    logger.error(`Failed to send message: ${error}`);
   }
 };
 
@@ -39,27 +47,34 @@ getStartingPitchers = async function () {
   return result;
 }
 
+scheduleMessage = function (message, date) {
+  logger.info(`Scheduling message for ${date.toTimeString()}`)
+  return new CronJob(date, () => {
+    sendMessage(message);
+  }, null, false, 'America/New_York');
+}
+
 test = async function () {
   let date = new Date();
   date.setMinutes(date.getMinutes() + 1);
   let pitchers = { date, message: "This is a test message." }
-  console.log(pitchers);
-  let job = new CronJob(pitchers.date, async () => {
-    console.log("Sending message");
-    await sendMessage(pitchers.message);
-    console.log("Message sent");
-  }, null, false, 'America/New_York')
+  logger.info(`Pitchers: ${JSON.stringify(pitchers)}`);
+  let job = scheduleMessage(pitchers.message, pitchers.date);
   job.start();
 }
 
 main = async function () {
-  let pitchers = await getStartingPitchers();
-  if (pitchers) {
-    let job = new CronJob(pitchers.date, () => {
-      sendMessage(pitchers.message);
-    }, null, false, 'America/New_York')
-    job.start();
+  try {
+    let pitchers = await getStartingPitchers();
+    logger.info(`Pitchers: ${JSON.stringify(pitchers)}`);
+    if (pitchers) {
+      let job = scheduleMessage(pitchers.message, pitchers.date);
+      job.start();
+    }
+  }
+  catch (error) {
+    logger.error(error);
   }
 }
 
-options.debug ? test() : main();
+options.test ? test() : main();
