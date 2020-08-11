@@ -4,6 +4,10 @@ const CronJob = require('cron').CronJob;
 require('dotenv').config();
 
 const log4js = require("log4js");
+log4js.configure({
+  appenders: { all: { type: "file", filename: "degrom.log" } },
+  categories: { default: { appenders: ["all"], level: "debug" } }
+});
 const logger = log4js.getLogger();
 
 const commandLineArgs = require('command-line-args')
